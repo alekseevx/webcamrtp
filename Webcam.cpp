@@ -1,8 +1,11 @@
 #include <stdexcept>
 
 extern "C" {
+
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
+#include <libswscale/swscale.h>
+
 }
 
 #include "Webcam.h"
@@ -22,6 +25,9 @@ Webcam::Webcam(const std::string& webcamId)
 
     AVDictionary* formatOpts = nullptr;
     av_dict_set(&formatOpts, "fflags", "nobuffer", 0);
+    av_dict_set(&formatOpts, "rtbufsize", "100M", 0);
+    av_dict_set(&formatOpts, "framerate", "30", 0);
+    av_dict_set(&formatOpts, "pix_fmt", "yuv420p", 0);
 
     std::string webcamUrl = "video=" + webcamId;
     int res = avformat_open_input(&this->ic, webcamUrl.c_str(), format, &formatOpts);
@@ -38,7 +44,7 @@ Webcam::Webcam(const std::string& webcamId)
     }
 
     AVCodecParameters* codecpar = ic->streams[0]->codecpar;
-    if (codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
+    if (codecpar->codec_type != AVMEDIA_TYPE_VIDEO)
     {
         this->clear();
         throw std::runtime_error("Stream has invalid codec type");
@@ -64,6 +70,21 @@ Webcam::Webcam(const std::string& webcamId)
         this->clear();
         throw std::runtime_error("avcodec_parameters_to_context failed");
     }
+
+    res = avcodec_open2(this->dec, nullptr, nullptr);
+    if (res != 0)
+    {
+        this->clear();
+        throw std::runtime_error("avcodec_open2 failed");
+    }
+
+    if (this->dec->pix_fmt != AV_PIX_FMT_YUV420P)
+    {
+        this->sws = sws_getContext(
+                    this->dec->width, this->dec->height, this->dec->pix_fmt,
+                    this->dec->width, this->dec->height, AV_PIX_FMT_YUV420P,
+                    0, 0, 0, 0);
+    }
 }
 
 Webcam::~Webcam()
@@ -86,8 +107,7 @@ int Webcam::height() const
     return  this->dec->height;
 }
 
-
-AVFrame* Webcam::next()
+AVFrame* Webcam::get()
 {
     while (true)
     {
@@ -97,6 +117,8 @@ AVFrame* Webcam::next()
         int res = av_read_frame(this->ic, &pkg);
         if (res != 0)
             throw std::runtime_error("av_read_frame failed");
+
+//        av_packet_rescale_ts(&pkg, this->ic->streams[0]->time_base, this->dec->time_base);
 
         res = avcodec_send_packet(this->dec, &pkg);
         av_packet_unref(&pkg);
@@ -110,23 +132,59 @@ AVFrame* Webcam::next()
 
         res = avcodec_receive_frame(this->dec, frame);
         if (res == 0)
-            return frame;
+            return convertColorSpace(frame);
 
         av_frame_free(&frame);
-
         if (res == AVERROR(EAGAIN))
             continue;
         throw std::runtime_error("avcodec_receive_frame failed");
     }
 }
 
+AVFrame* Webcam::convertColorSpace(AVFrame* frame)
+{
+    if (this->sws == nullptr)
+        return frame;
+
+
+    AVFrame* retFrame = av_frame_alloc();
+    if (retFrame == nullptr)
+    {
+        av_frame_free(&frame);
+        throw std::runtime_error("av_frame_alloc failed");
+    }
+    retFrame->width = frame->width;
+    retFrame->height = frame->height;
+    retFrame->format = AV_PIX_FMT_YUV420P;
+    int res = av_frame_get_buffer(retFrame, FF_INPUT_BUFFER_PADDING_SIZE);
+    if (res != 0)
+    {
+        av_frame_free(&frame);
+        av_frame_free(&retFrame);
+        throw std::runtime_error("av_frame_alloc failed");
+    }
+
+    sws_scale(this->sws,
+              frame->data, frame->linesize, 0, frame->height,
+              retFrame->data, retFrame->linesize);
+    av_frame_free(&frame);
+
+    return retFrame;
+}
+
 void Webcam::clear()
 {
-    if (dec != nullptr)
+    if (this->dec != nullptr)
         avcodec_free_context(&dec);
 
-    if (ic != nullptr)
+    if (this->ic != nullptr)
         avformat_close_input(&ic);
+
+    if (this->sws != nullptr)
+    {
+        sws_freeContext(this->sws);
+        this->sws = nullptr;
+    }
 }
 
 
