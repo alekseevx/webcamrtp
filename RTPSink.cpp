@@ -1,9 +1,11 @@
 #include <stdexcept>
+#include <iostream>
 
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libswscale/swscale.h>
+#include <libavutil/time.h>
 }
 
 #include "RTPSink.h"
@@ -14,7 +16,6 @@ namespace webcamrtp
 
 RTPSink::RTPSink(int width,
     int height,
-    const AVRational& fps,
     const std::string& codecName,
     const std::string& reciverUrl)
 {
@@ -32,15 +33,15 @@ RTPSink::RTPSink(int width,
         throw std::runtime_error("avcodec_alloc_context3 failed");
     }
 
-    this->enc->time_base = fps;
+    this->enc->time_base = {1, AV_TIME_BASE};
     this->enc->width = width;
     this->enc->height = height;
     this->enc->pix_fmt = AV_PIX_FMT_YUV420P;
     AVDictionary* encOpts = nullptr;
-//    av_dict_set(&encOpts, "b", "512K", 0);
-//    av_dict_set(&encOpts, "deadline", "realtime", 0);
-//    av_dict_set(&encOpts, "crf", "30", 0);
-//    av_dict_set(&encOpts, "g", "60", 0);
+    av_dict_set(&encOpts, "b", "512K", 0);
+    av_dict_set(&encOpts, "deadline", "realtime", 0);
+    av_dict_set(&encOpts, "crf", "30", 0);
+    av_dict_set(&encOpts, "g", "60", 0);
 
     int res = avcodec_open2(this->enc, codec, &encOpts);
     if (res != 0)
@@ -92,7 +93,7 @@ RTPSink::~RTPSink()
 
 void RTPSink::put(AVFrame* frame)
 {
-    frame->pts = this->pts++;
+    frame->pts = av_gettime_relative();
 
     int res = avcodec_send_frame(this->enc, frame);
     av_frame_free(&frame);
@@ -107,6 +108,7 @@ void RTPSink::put(AVFrame* frame)
     {
         AVStream* stream = this->oc->streams[0];
         av_packet_rescale_ts(&pkg, this->enc->time_base, stream->time_base);
+
         pkg.stream_index = 0;
         res = av_interleaved_write_frame(this->oc, &pkg);
         if (res != 0)

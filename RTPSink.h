@@ -22,7 +22,6 @@ public:
     RTPSink(
         int width,
         int height,
-        const AVRational& fps,
         const std::string& codecName,
         const std::string& reciverUrl);
     ~RTPSink();
@@ -35,7 +34,6 @@ private:
 private:
     AVFormatContext* oc = nullptr;
     AVCodecContext* enc = nullptr;
-    int64_t pts = 0;
 };
 
 }

@@ -53,7 +53,6 @@ int main()
         webcamrtp::RTPSink sink(
                     webcam.width(),
                     webcam.height(),
-                    webcam.fps(),
                     "libvpx",
                     "rtp://127.0.0.1:9090");
         while (AVFrame* frame = webcam.get())

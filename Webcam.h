@@ -11,6 +11,7 @@ struct AVFormatContext;
 struct AVCodecContext;
 struct AVFrame;
 struct SwsContext;
+struct AVPacket;
 
 }
 
@@ -33,12 +34,13 @@ public:
 
 private:
     void clear();
-    AVFrame* convertColorSpace(AVFrame* frame);
+
+    void receivePackage(AVPacket* pkg);
+    AVFrame* decoding(AVPacket* pkg);
 
 private:
     AVFormatContext* ic = nullptr;
     AVCodecContext* dec = nullptr;
-    SwsContext* sws = nullptr;
 };
 
 }
