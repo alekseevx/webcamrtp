@@ -93,7 +93,7 @@ RTPSink::~RTPSink()
 
 void RTPSink::put(AVFrame* frame)
 {
-    frame->pts = av_gettime_relative();
+//    frame->pts = av_gettime_relative();
 
     int res = avcodec_send_frame(this->enc, frame);
     av_frame_free(&frame);

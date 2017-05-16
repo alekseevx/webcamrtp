@@ -143,7 +143,11 @@ AVFrame* Webcam::decoding(AVPacket* pkg)
 
     res = avcodec_receive_frame(this->dec, frame);
     if (res == 0)
+    {
+        frame->pts = av_rescale_q(frame->pkt_dts,
+                                  this->ic->streams[0]->time_base, {1, AV_TIME_BASE});
         return frame;
+    }
 
     av_frame_free(&frame);
     if (res == AVERROR(EAGAIN))
