@@ -15,35 +15,13 @@ extern "C"
 #include "RTPSink.h"
 
 
-static AVFrame *alloc_picture(int width, int height)
-{
-    AVFrame *picture;
-    int ret;
-
-    picture = av_frame_alloc();
-    if (!picture)
-        return NULL;
-
-    picture->format = AV_PIX_FMT_YUV420P;
-    picture->width  = width;
-    picture->height = height;
-
-    /* allocate the buffers for the frame data */
-    ret = av_frame_get_buffer(picture, 32);
-    if (ret < 0) {
-        fprintf(stderr, "Could not allocate frame data.\n");
-        exit(1);
-    }
-
-    return picture;
-}
-
 
 int main()
 {
     try
     {
 //        av_log_set_level(AV_LOG_TRACE);
+        av_log_set_level(AV_LOG_ERROR);
 
         av_register_all();
         avdevice_register_all();
@@ -53,6 +31,8 @@ int main()
         webcamrtp::RTPSink sink(
                     webcam.width(),
                     webcam.height(),
+                    webcam.pixFmt(),
+                    webcam.fps(),
                     "libvpx",
                     "rtp://127.0.0.1:9090");
         while (AVFrame* frame = webcam.get())

@@ -26,6 +26,7 @@ public:
     ~Webcam();
 
     AVRational fps() const;
+    int pixFmt() const;
     int width() const;
     int height() const;
 
